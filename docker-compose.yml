@@ -106,15 +106,13 @@ services:
     networks:
       - microservicos-net
 
-  # --- Serviço de autenticação ---
+  # --- Servico de cadastro de usuarios ---
   auth-service:
     build: ./auth-service
     container_name: auth-service
     depends_on:
-      eureka-server:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
+      - eureka-server
+      - config-server
     environment:
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       # ativa o profile "docker", que faz o config-server servir também

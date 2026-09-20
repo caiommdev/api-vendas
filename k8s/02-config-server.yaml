@@ -4,6 +4,32 @@ metadata:
   name: config-repo-files          # nome do ConfigMap
   namespace: ecommerce
 data:
+  auth-service.properties: |
+    server.port=8084
+
+    server.error.include-message=always
+
+    # H2 em memoria
+    spring.datasource.url=jdbc:h2:mem:authdb
+    spring.datasource.driver-class-name=org.h2.Driver
+    spring.datasource.username=sa
+    spring.datasource.password=
+
+    spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+    spring.jpa.hibernate.ddl-auto=update
+    spring.jpa.show-sql=true
+
+    # Console web do H2, acessivel em http://localhost:8084/h2-console
+    spring.h2.console.enabled=true
+    spring.h2.console.path=/h2-console
+
+    # Registro no Eureka
+    eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+    eureka.client.fetch-registry=true
+    eureka.client.register-with-eureka=true
+    eureka.instance.prefer-ip-address=true
+  auth-service-docker.properties: |
+    eureka.client.service-url.defaultZone=http://eureka-server:8761/eureka/
   clientes-service.properties: |
     server.port=8083
 
