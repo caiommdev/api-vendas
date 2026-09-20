@@ -13,7 +13,7 @@ spec:
       labels:
         app: auth-service
     spec:
-      initContainers:
+      initContainers:          # rodam antes do container principal, um de cada vez
         - name: espera-eureka
           image: busybox:1.36
           command: ['sh', '-c', 'until nc -z eureka-server 8761; do sleep 2; done']
@@ -31,10 +31,19 @@ spec:
               value: "optional:configserver:http://config-server:8888"
             - name: SPRING_PROFILES_ACTIVE
               value: "docker"
+            # Porta explicita: se o config-server falhar, o import e "optional:"
+            # e a app subiria na 8080 padrao, quebrando o readinessProbe.
             - name: SERVER_PORT
               value: "8084"
+            # NAO use EUREKA_CLIENT_SERVICEURL_DEFAULTZONE aqui: serviceUrl e um
+            # Map, e a env var vira a chave minuscula "defaultzone", enquanto o
+            # Eureka le "defaultZone" -- o default localhost:8761 acabava vencendo.
             - name: SPRING_APPLICATION_JSON
               value: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://eureka-server:8761/eureka/"}}}}'
+            # O Eureka registrava o hostname do Pod (ex: produtos-service-abc123),
+            # que NAO tem registro no DNS do cluster -> o gateway falhava com
+            # UnknownHostException/NXDOMAIN. Aqui forcamos o IP do Pod, que e
+            # roteavel. Sao escalares, entao a env var vincula sem problema.
             - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
               value: "true"
             - name: EUREKA_INSTANCE_IP_ADDRESS
