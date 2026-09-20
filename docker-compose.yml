@@ -6,6 +6,15 @@ services:
     container_name: eureka-server # nome fixo do container (e nome que os outros usam na rede)
     ports:
       - "8761:8761"                # porta_da_maquina:porta_do_container -> localhost:8761
+    healthcheck:
+      # sem isso, "depends_on" só espera o container existir, não a app
+      # Spring lá dentro estar pronta -- os outros serviços chegavam a tentar
+      # se registrar/buscar config antes do eureka/config-server responder.
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
     networks:
       - microservicos-net           # entra na rede compartilhada com os outros serviços
 
@@ -27,6 +36,12 @@ services:
       # e as portas publicadas abaixo apontariam para onde ninguem escuta.
       - SPRING_PROFILES_ACTIVE=native
       - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:///config-repo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
     networks:
       - microservicos-net
 
@@ -34,9 +49,11 @@ services:
   produtos-service:
     build: ./produtos-service
     container_name: produtos-service
-    depends_on:                    # só cria este container depois dos dois abaixo
-      - eureka-server               # (não garante que já estejam "prontos", só criados)
-      - config-server
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
     environment:
       # troca "localhost" por "config-server", o nome do serviço na rede Docker
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
@@ -55,8 +72,10 @@ services:
     build: ./vendas-service
     container_name: vendas-service
     depends_on:
-      - eureka-server
-      - config-server
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
     environment:
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       # ativa o profile "docker", que faz o config-server servir também
@@ -72,8 +91,10 @@ services:
     build: ./clientes-service
     container_name: clientes-service
     depends_on:
-      - eureka-server
-      - config-server
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
     environment:
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       # ativa o profile "docker", que faz o config-server servir também
@@ -85,14 +106,38 @@ services:
     networks:
       - microservicos-net
 
+  # --- Serviço de autenticação ---
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      # ativa o profile "docker", que faz o config-server servir também
+      # auth-service-docker.properties (sobrescreve a URL do Eureka)
+      - SPRING_PROFILES_ACTIVE=docker
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    ports:
+      - "8084:8084"
+    networks:
+      - microservicos-net
+
   # --- API Gateway (porta de entrada única, roteia por nome de serviço no Eureka) ---
   gateway:
     build: ./gateway
     container_name: gateway
     depends_on:
-      - eureka-server               # gateway só precisa do eureka pra descobrir os serviços
+      eureka-server:
+        condition: service_healthy
     environment:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      # mesmo segredo usado pelo auth-service (config-repo/auth-service.properties)
+      # para assinar os JWTs -- o gateway precisa dele para validar os tokens.
+      - JWT_SECRET=falaapp-shared-dev-secret-key-troque-isso-em-producao-0123456789
     ports:
       - "8085:8085"
     networks:

@@ -14,9 +14,12 @@ spec:
         app: gateway
     spec:
       initContainers:
-        - name: espera-eureka                # só este — o gateway não fala com o config-server
+        - name: espera-eureka                # o gateway não fala com o config-server
           image: busybox:1.36
           command: ['sh', '-c', 'until nc -z eureka-server 8761; do sleep 2; done']
+        - name: espera-auth-service
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z auth-service 8084; do sleep 2; done']
       containers:
         - name: gateway
           image: gateway:1.0
@@ -26,6 +29,10 @@ spec:
           env:
             - name: SPRING_APPLICATION_JSON
               value: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://eureka-server:8761/eureka/"}}}}'
+            # mesmo segredo usado pelo auth-service para assinar os JWTs --
+            # o gateway precisa dele para validar os tokens.
+            - name: JWT_SECRET
+              value: "falaapp-shared-dev-secret-key-troque-isso-em-producao-0123456789"
             # O Eureka registrava o hostname do Pod (ex: produtos-service-abc123),
             # que NAO tem registro no DNS do cluster -> o gateway falhava com
             # UnknownHostException/NXDOMAIN. Aqui forcamos o IP do Pod, que e
