@@ -23,9 +23,21 @@ done
 
 ## 4. Aplicar os manifests
 
+O config-server le os `.properties` de um ConfigMap. Em vez de manter uma copia
+na mao dentro do YAML (que vive desatualizando), o ConfigMap e gerado direto da
+pasta `config-repo/`:
+
 ```bash
+# 1) gera o ConfigMap a partir do config-repo/ (fonte unica da verdade)
+kubectl create configmap config-repo-files -n ecommerce \
+  --from-file=config-repo/ --dry-run=client -o yaml | kubectl apply -f -
+
+# 2) aplica o resto dos manifests
 kubectl apply -f k8s/
 ```
+
+> O namespace precisa existir antes: se der erro de namespace, rode primeiro
+> `kubectl apply -f k8s/00-namespace.yaml`.
 
 ## 5. Ver se subiu
 
@@ -94,6 +106,18 @@ kubectl exec -n ecommerce deploy/eureka-server -- \
 docker build -t produtos-service:1.0 ./produtos-service
 kind load docker-image produtos-service:1.0 --name ecommerce
 kubectl rollout restart deployment/produtos-service -n ecommerce
+```
+
+### Mudei um `.properties` no config-repo, e agora?
+
+Regera o ConfigMap e reinicia o config-server (pra remontar os arquivos) e o
+servico afetado:
+
+```bash
+kubectl create configmap config-repo-files -n ecommerce \
+  --from-file=config-repo/ --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/config-server -n ecommerce
+kubectl rollout restart deployment/auth-service -n ecommerce   # o servico que usa a config
 ```
 
 ### Pra derrubar tudo
