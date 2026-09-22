@@ -34,17 +34,18 @@ flowchart TD
     GW[API Gateway :8085<br/>valida JWT]
     EU[Eureka Server :8761<br/>service discovery]
     CS[Config Server :8888<br/>config centralizada]
-    AU[auth-service :8084]
+    AU[auth-service :8086]
     PR[produtos-service :8081]
     VE[vendas-service :8082]
     CL[clientes-service :8083]
+    FO[fornecedor-service :8084]
     REPO[(config-repo/<br/>*.properties)]
 
     Client -->|Bearer token| GW
-    GW -->|roteia por service-id| AU & PR & VE & CL
-    AU & PR & VE & CL -.->|registram-se| EU
+    GW -->|roteia por service-id| AU & PR & VE & CL & FO
+    AU & PR & VE & CL & FO -.->|registram-se| EU
     GW -.->|descobre rotas| EU
-    AU & PR & VE & CL -.->|buscam config| CS
+    AU & PR & VE & CL & FO -.->|buscam config| CS
     CS --> REPO
     VE -->|OpenFeign: busca produto| PR
 ```
@@ -69,10 +70,11 @@ Fluxo geral:
 | `eureka-server`    | 8761  | Service discovery (registro/descoberta)                 | —            |
 | `config-server`    | 8888  | Configuração centralizada (lê `config-repo/`)           | —            |
 | `gateway`          | 8085  | Porta de entrada única + validação de JWT               | —            |
-| `auth-service`     | 8084  | Registro/login de usuários, emissão de JWT              | `authdb`     |
+| `auth-service`     | 8086  | Registro/login de usuários, emissão de JWT              | `authdb`     |
 | `produtos-service` | 8081  | CRUD de produtos                                         | `produtosdb` |
 | `vendas-service`   | 8082  | Registro de vendas (consulta produtos via Feign)        | `vendasdb`   |
 | `clientes-service` | 8083  | Consulta de clientes                                    | `clientesdb` |
+| `fornecedor-service` | 8084  | Consulta de fornecedores                                 | `fornecedordb` |
 
 > Todos os bancos são **H2 em memória** — os dados são recriados a cada
 > reinício, junto com os dados de exemplo (seed).
@@ -170,6 +172,7 @@ cd config-server && ./mvnw spring-boot:run
 cd produtos-service && ./mvnw spring-boot:run
 cd vendas-service   && ./mvnw spring-boot:run
 cd clientes-service && ./mvnw spring-boot:run
+cd fornecedor-service && ./mvnw spring-boot:run
 cd auth-service     && ./mvnw spring-boot:run
 # 4. Gateway
 cd gateway && ./mvnw spring-boot:run
@@ -333,6 +336,20 @@ curl -X DELETE http://localhost:8085/auth-service/api/users/<uuid> \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+### 7. Listar fornecedores (protegido)
+
+```bash
+curl http://localhost:8085/fornecedor-service/fornecedores \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Buscar fornecedor por id:
+
+```bash
+curl http://localhost:8085/fornecedor-service/fornecedores/1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ### Resumo dos endpoints
 
 | Método | Rota (via gateway)                        | Auth | Descrição                     |
@@ -348,6 +365,8 @@ curl -X DELETE http://localhost:8085/auth-service/api/users/<uuid> \
 | GET    | `/vendas-service/vendas`                  | ✅   | Health check simples          |
 | POST   | `/vendas-service/vendas`                  | ✅   | Registra venda                |
 | GET    | `/clientes-service/clientes`              | ✅   | Lista clientes                |
+| GET    | `/fornecedor-service/fornecedores`        | ✅   | Lista fornecedores            |
+| GET    | `/fornecedor-service/fornecedores/{id}`   | ✅   | Busca fornecedor por id       |
 
 ---
 
@@ -372,7 +391,8 @@ Ao subir, `produtos-service` e `clientes-service` populam o H2 automaticamente
 | H2 — produtos           | http://localhost:8081/h2-console      |
 | H2 — vendas             | http://localhost:8082/h2-console      |
 | H2 — clientes           | http://localhost:8083/h2-console      |
-| H2 — auth               | http://localhost:8084/h2-console      |
+| H2 — fornecedores       | http://localhost:8084/h2-console      |
+| H2 — auth               | http://localhost:8086/h2-console      |
 
 Credenciais do H2: usuário `sa`, senha em branco. A JDBC URL é a de cada serviço
 (ex.: `jdbc:h2:mem:produtosdb`).
