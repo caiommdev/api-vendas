@@ -1,0 +1,100 @@
+name: Deploy Pipeline with Tests
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth-service
+          - gateway
+          - vendas-service
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    env:
+      JWT_SECRET: 00d23b30-8bd5-4cfa-935c-9305be24d5f7
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Executar testes
+        run: mvn clean test
+
+      - name: Publicar relatório de testes
+        if: always() && hashFiles(format('{0}/target/surefire-reports/*.xml', matrix.service)) != ''
+        uses: dorny/test-reporter@v1
+        with:
+          name: Resultados dos Testes - ${{ matrix.service }}
+          path: ${{ matrix.service }}/target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: production
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build dos serviços
+        run: |
+          set -e
+          services=(auth-service clientes-service config-server eureka-server fornecedor-service gateway produtos-service vendas-service)
+          for service in "${services[@]}"; do
+            echo "::group::Build $service"
+            (cd "$service" && mvn clean package -DskipTests)
+            echo "::endgroup::"
+          done
+
+      - name: Simular deploy
+        run: |
+          echo "::group::Informações de Deploy"
+          echo "Tag/Versão: ${GITHUB_REF#refs/tags/}"
+          echo "Commit SHA: $GITHUB_SHA"
+          echo "Actor: $GITHUB_ACTOR"
+          echo "Repositório: $GITHUB_REPOSITORY"
+          echo "::endgroup::"
+
+          echo "::notice::Iniciando deploy simulado..."
+          sleep 2
+
+          mkdir -p deliverable
+          find . -path '*/target/*.jar' -not -path './target/*' -exec cp {} deliverable/ \;
+          tar -czf api-vendas-deliverable.tgz deliverable
+
+          if [ -s api-vendas-deliverable.tgz ]; then
+            echo "::notice::Entregável api-vendas-deliverable.tgz gerado com sucesso!"
+          else
+            echo "::error::Falha ao gerar o entregável"
+            exit 1
+          fi
+
+      - name: Publicar entregável
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-vendas-deliverable
+          path: api-vendas-deliverable.tgz
+          if-no-files-found: error

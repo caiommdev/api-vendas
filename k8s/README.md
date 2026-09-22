@@ -15,7 +15,7 @@ kind create cluster --name ecommerce
 ## 3. Buildar e carregar as imagens
 
 ```bash
-for s in eureka-server config-server produtos-service vendas-service clientes-service auth-service gateway; do
+for s in eureka-server config-server produtos-service vendas-service clientes-service fornecedor-service auth-service gateway; do
   docker build -t $s:1.0 ./$s
   kind load docker-image $s:1.0 --name ecommerce
 done
@@ -61,6 +61,7 @@ Depois, tudo passa pelo gateway usando o nome do servico como prefixo:
 ```bash
 curl http://localhost:8085/produtos-service/produtos
 curl http://localhost:8085/vendas-service/vendas
+curl http://localhost:8085/fornecedor-service/fornecedores
 ```
 
 Pra ver o painel do Eureka: `kubectl port-forward -n ecommerce svc/eureka-server 8761:8761`
