@@ -2,8 +2,8 @@ name: Deploy Pipeline with Tests
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - '**'
   workflow_dispatch:
 
 jobs:
